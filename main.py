@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Query, HTTPException
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 import duckdb
 from typing import Optional, List, Dict, Any
 import html
@@ -9,7 +9,7 @@ import re
 from datetime import datetime
 from pathlib import Path
 
-app = FastAPI(title="StackSlice", description="Slice and dice Stack Overflow data")
+app = FastAPI(title="StackSlice", description="Slice and dice Stack Exchange data")
 
 # Setup templates and static files
 templates = Jinja2Templates(directory="templates")
@@ -21,6 +21,28 @@ DB_PATH = "stackexchange.db"
 def get_db():
     """Get database connection"""
     return duckdb.connect(DB_PATH)
+
+def get_available_sites():
+    """Get list of available sites in the database"""
+    try:
+        conn = get_db()
+        sites = conn.execute("SELECT DISTINCT site FROM posts ORDER BY site").fetchall()
+        conn.close()
+        return [site[0] for site in sites]
+    except:
+        return []
+
+def get_default_site():
+    """Get the default site (first available site)"""
+    sites = get_available_sites()
+    return sites[0] if sites else "ai.stackexchange.com"
+
+def validate_site(site: str) -> str:
+    """Validate and return a valid site name"""
+    available_sites = get_available_sites()
+    if site and site in available_sites:
+        return site
+    return get_default_site()
 
 def clean_html(text: str) -> str:
     """Clean HTML tags from text and decode entities"""
@@ -52,57 +74,62 @@ def extract_tags(tags_str: str) -> List[str]:
     return [tag for tag in tags_str.split('|') if tag]
 
 @app.get("/", response_class=HTMLResponse)
-async def home(request: Request):
+async def home(request: Request, site: Optional[str] = Query(None)):
     """Home page with overview statistics"""
+    site = validate_site(site)
     conn = get_db()
     
     try:
-        # Get basic statistics
+        # Get basic statistics for the selected site
         stats = {}
         
         # Total posts
-        result = conn.execute("SELECT COUNT(*) as total FROM posts").fetchone()
+        result = conn.execute("SELECT COUNT(*) as total FROM posts WHERE site = ?", [site]).fetchone()
         stats['total_posts'] = result[0] if result else 0
         
         # Total questions (PostTypeId = 1)
-        result = conn.execute("SELECT COUNT(*) as total FROM posts WHERE post_type_id = 1").fetchone()
+        result = conn.execute("SELECT COUNT(*) as total FROM posts WHERE site = ? AND post_type_id = 1", [site]).fetchone()
         stats['total_questions'] = result[0] if result else 0
         
         # Total answers (PostTypeId = 2)
-        result = conn.execute("SELECT COUNT(*) as total FROM posts WHERE post_type_id = 2").fetchone()
+        result = conn.execute("SELECT COUNT(*) as total FROM posts WHERE site = ? AND post_type_id = 2", [site]).fetchone()
         stats['total_answers'] = result[0] if result else 0
         
         # Total users
-        result = conn.execute("SELECT COUNT(*) as total FROM users").fetchone()
+        result = conn.execute("SELECT COUNT(*) as total FROM users WHERE site = ?", [site]).fetchone()
         stats['total_users'] = result[0] if result else 0
         
         # Total comments
-        result = conn.execute("SELECT COUNT(*) as total FROM comments").fetchone()
+        result = conn.execute("SELECT COUNT(*) as total FROM comments WHERE site = ?", [site]).fetchone()
         stats['total_comments'] = result[0] if result else 0
         
         # Most recent activity
         result = conn.execute("""
             SELECT creation_date 
             FROM posts 
+            WHERE site = ?
             ORDER BY creation_date DESC 
             LIMIT 1
-        """).fetchone()
+        """, [site]).fetchone()
         stats['latest_activity'] = format_date(result[0]) if result else "N/A"
         
         # Top tags
         top_tags = conn.execute("""
             SELECT tag_name, count 
             FROM tags 
+            WHERE site = ?
             ORDER BY count DESC 
             LIMIT 10
-        """).fetchall()
+        """, [site]).fetchall()
         
         conn.close()
         
         return templates.TemplateResponse("home.html", {
             "request": request,
             "stats": stats,
-            "top_tags": top_tags
+            "top_tags": top_tags,
+            "current_site": site,
+            "available_sites": get_available_sites()
         })
         
     except Exception as e:
@@ -116,17 +143,19 @@ async def posts_page(
     limit: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
     post_type: Optional[str] = None,
-    sort: str = Query("recent")
+    sort: str = Query("recent"),
+    site: Optional[str] = Query(None)
 ):
     """Browse posts with pagination and filtering"""
+    site = validate_site(site)
     conn = get_db()
     
     try:
         offset = (page - 1) * limit
         
         # Build WHERE clause
-        where_conditions = []
-        params = []
+        where_conditions = ["site = ?"]
+        params = [site]
         
         if search:
             where_conditions.append("(title ILIKE ? OR body ILIKE ?)")
@@ -139,7 +168,7 @@ async def posts_page(
             where_conditions.append("post_type_id = ?")
             params.append(2)
         
-        where_clause = " AND ".join(where_conditions) if where_conditions else "1=1"
+        where_clause = " AND ".join(where_conditions)
         
         # Build ORDER BY clause
         if sort == "recent":
@@ -203,7 +232,9 @@ async def posts_page(
             "has_prev": page > 1,
             "has_next": page < total_pages,
             "prev_page": page - 1 if page > 1 else None,
-            "next_page": page + 1 if page < total_pages else None
+            "next_page": page + 1 if page < total_pages else None,
+            "current_site": site,
+            "available_sites": get_available_sites()
         })
         
     except Exception as e:
@@ -211,8 +242,9 @@ async def posts_page(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/posts/{post_id}", response_class=HTMLResponse)
-async def post_detail(request: Request, post_id: int):
+async def post_detail(request: Request, post_id: int, site: Optional[str] = Query(None)):
     """View a specific post with its answers and comments"""
+    site = validate_site(site)
     conn = get_db()
     
     try:
@@ -220,28 +252,28 @@ async def post_detail(request: Request, post_id: int):
         post_query = """
             SELECT p.*, u.display_name as owner_name
             FROM posts p
-            LEFT JOIN users u ON p.owner_user_id = u.id
-            WHERE p.id = ?
+            LEFT JOIN users u ON p.owner_user_id = u.id AND u.site = p.site
+            WHERE p.id = ? AND p.site = ?
         """
-        post_data = conn.execute(post_query, [post_id]).fetchone()
+        post_data = conn.execute(post_query, [post_id, site]).fetchone()
         
         if not post_data:
             raise HTTPException(status_code=404, detail="Post not found")
         
         # Format main post
         post = {
-            'id': post_data[0],
-            'post_type_id': post_data[1],
-            'title': post_data[11] or "No title",
-            'body': post_data[6],
-            'score': post_data[4],
-            'view_count': post_data[5],
-            'creation_date': format_date(post_data[3]),
-            'owner_user_id': post_data[7],
+            'id': post_data[1],  # Updated index after adding site column
+            'post_type_id': post_data[2],
+            'title': post_data[12] or "No title",
+            'body': post_data[7],
+            'score': post_data[5],
+            'view_count': post_data[6],
+            'creation_date': format_date(post_data[4]),
+            'owner_user_id': post_data[8],
             'owner_name': post_data[-1] or "Unknown User",
-            'tags': extract_tags(post_data[12]),
-            'answer_count': post_data[13],
-            'comment_count': post_data[14]
+            'tags': extract_tags(post_data[13]),
+            'answer_count': post_data[14],
+            'comment_count': post_data[15]
         }
         
         # Get answers if this is a question
@@ -250,21 +282,21 @@ async def post_detail(request: Request, post_id: int):
             answers_query = """
                 SELECT p.*, u.display_name as owner_name
                 FROM posts p
-                LEFT JOIN users u ON p.owner_user_id = u.id
-                WHERE p.parent_id = ? AND p.post_type_id = 2
+                LEFT JOIN users u ON p.owner_user_id = u.id AND u.site = p.site
+                WHERE p.parent_id = ? AND p.post_type_id = 2 AND p.site = ?
                 ORDER BY p.score DESC, p.creation_date ASC
             """
-            answers_data = conn.execute(answers_query, [post_id]).fetchall()
+            answers_data = conn.execute(answers_query, [post_id, site]).fetchall()
             
             for answer_data in answers_data:
                 answer = {
-                    'id': answer_data[0],
-                    'body': answer_data[6],
-                    'score': answer_data[4],
-                    'creation_date': format_date(answer_data[3]),
-                    'owner_user_id': answer_data[7],
+                    'id': answer_data[1],  # Updated index after adding site column
+                    'body': answer_data[7],
+                    'score': answer_data[5],
+                    'creation_date': format_date(answer_data[4]),
+                    'owner_user_id': answer_data[8],
                     'owner_name': answer_data[-1] or "Unknown User",
-                    'is_accepted': answer_data[0] == post_data[2]  # accepted_answer_id
+                    'is_accepted': answer_data[1] == post_data[3]  # accepted_answer_id
                 }
                 answers.append(answer)
         
@@ -272,20 +304,20 @@ async def post_detail(request: Request, post_id: int):
         comments_query = """
             SELECT c.*, u.display_name as user_name
             FROM comments c
-            LEFT JOIN users u ON c.user_id = u.id
-            WHERE c.post_id = ?
+            LEFT JOIN users u ON c.user_id = u.id AND u.site = c.site
+            WHERE c.post_id = ? AND c.site = ?
             ORDER BY c.creation_date ASC
         """
-        comments_data = conn.execute(comments_query, [post_id]).fetchall()
+        comments_data = conn.execute(comments_query, [post_id, site]).fetchall()
         
         comments = []
         for comment_data in comments_data:
             comment = {
-                'id': comment_data[0],
-                'text': comment_data[3],
-                'score': comment_data[2],
-                'creation_date': format_date(comment_data[4]),
-                'user_id': comment_data[5],
+                'id': comment_data[1],  # Updated index after adding site column
+                'text': comment_data[4],
+                'score': comment_data[3],
+                'creation_date': format_date(comment_data[5]),
+                'user_id': comment_data[7],
                 'user_name': comment_data[-1] or "Unknown User"
             }
             comments.append(comment)
@@ -296,7 +328,9 @@ async def post_detail(request: Request, post_id: int):
             "request": request,
             "post": post,
             "answers": answers,
-            "comments": comments
+            "comments": comments,
+            "current_site": site,
+            "available_sites": get_available_sites()
         })
         
     except Exception as e:
@@ -311,21 +345,25 @@ async def users_page(
     page: int = Query(1, ge=1),
     limit: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
-    sort: str = Query("reputation")
+    sort: str = Query("reputation"),
+    site: Optional[str] = Query(None)
 ):
     """Browse users with pagination and filtering"""
+    site = validate_site(site)
     conn = get_db()
     
     try:
         offset = (page - 1) * limit
         
         # Build WHERE clause
-        where_clause = "1=1"
-        params = []
+        where_conditions = ["site = ?"]
+        params = [site]
         
         if search:
-            where_clause = "display_name ILIKE ?"
+            where_conditions.append("display_name ILIKE ?")
             params.append(f"%{search}%")
+        
+        where_clause = " AND ".join(where_conditions)
         
         # Build ORDER BY clause
         if sort == "reputation":
@@ -386,7 +424,9 @@ async def users_page(
             "has_prev": page > 1,
             "has_next": page < total_pages,
             "prev_page": page - 1 if page > 1 else None,
-            "next_page": page + 1 if page < total_pages else None
+            "next_page": page + 1 if page < total_pages else None,
+            "current_site": site,
+            "available_sites": get_available_sites()
         })
         
     except Exception as e:
@@ -394,8 +434,9 @@ async def users_page(
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/analytics", response_class=HTMLResponse)
-async def analytics(request: Request):
+async def analytics(request: Request, site: Optional[str] = Query(None)):
     """Analytics dashboard with charts and insights"""
+    site = validate_site(site)
     conn = get_db()
     
     try:
@@ -405,26 +446,28 @@ async def analytics(request: Request):
                 DATE_TRUNC('month', creation_date) as month,
                 COUNT(*) as count
             FROM posts 
-            WHERE post_type_id = 1
+            WHERE post_type_id = 1 AND site = ?
             GROUP BY DATE_TRUNC('month', creation_date)
             ORDER BY month
-        """).fetchall()
+        """, [site]).fetchall()
         
         # Top users by reputation
         top_users = conn.execute("""
             SELECT display_name, reputation, up_votes, down_votes
             FROM users
+            WHERE site = ?
             ORDER BY reputation DESC
             LIMIT 10
-        """).fetchall()
+        """, [site]).fetchall()
         
         # Popular tags
         popular_tags = conn.execute("""
             SELECT tag_name, count
             FROM tags
+            WHERE site = ?
             ORDER BY count DESC
             LIMIT 15
-        """).fetchall()
+        """, [site]).fetchall()
         
         # Post score distribution
         score_distribution = conn.execute("""
@@ -450,11 +493,11 @@ async def analytics(request: Request):
                         ELSE 6
                     END as sort_order
                 FROM posts
-                WHERE post_type_id = 1
+                WHERE post_type_id = 1 AND site = ?
             ) sub
             GROUP BY score_range, sort_order
             ORDER BY sort_order
-        """).fetchall()
+        """, [site]).fetchall()
         
         conn.close()
         
@@ -463,7 +506,9 @@ async def analytics(request: Request):
             "posts_over_time": posts_over_time,
             "top_users": top_users,
             "popular_tags": popular_tags,
-            "score_distribution": score_distribution
+            "score_distribution": score_distribution,
+            "current_site": site,
+            "available_sites": get_available_sites()
         })
         
     except Exception as e:
@@ -471,8 +516,9 @@ async def analytics(request: Request):
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
 @app.get("/api/tags", response_class=JSONResponse)
-async def api_tags(search: Optional[str] = None):
+async def api_tags(search: Optional[str] = None, site: Optional[str] = Query(None)):
     """API endpoint for tag search (for autocomplete)"""
+    site = validate_site(site)
     conn = get_db()
     
     try:
@@ -480,19 +526,20 @@ async def api_tags(search: Optional[str] = None):
             query = """
                 SELECT tag_name, count 
                 FROM tags 
-                WHERE tag_name ILIKE ? 
+                WHERE tag_name ILIKE ? AND site = ?
                 ORDER BY count DESC 
                 LIMIT 10
             """
-            tags = conn.execute(query, [f"%{search}%"]).fetchall()
+            tags = conn.execute(query, [f"%{search}%", site]).fetchall()
         else:
             query = """
                 SELECT tag_name, count 
                 FROM tags 
+                WHERE site = ?
                 ORDER BY count DESC 
                 LIMIT 20
             """
-            tags = conn.execute(query).fetchall()
+            tags = conn.execute(query, [site]).fetchall()
         
         conn.close()
         
@@ -501,6 +548,39 @@ async def api_tags(search: Optional[str] = None):
     except Exception as e:
         conn.close()
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+@app.get("/switch-site/{new_site}")
+async def switch_site(new_site: str, request: Request):
+    """Switch to a different site"""
+    # Validate the site exists
+    available_sites = get_available_sites()
+    if new_site not in available_sites:
+        raise HTTPException(status_code=404, detail="Site not found")
+    
+    # Get the referring page to redirect back to
+    referer = request.headers.get("referer", "/")
+    
+    # Parse the referer URL to maintain the current page but switch site
+    from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
+    
+    parsed = urlparse(referer)
+    query_params = parse_qs(parsed.query)
+    
+    # Update or add the site parameter
+    query_params["site"] = [new_site]
+    
+    # Rebuild the URL
+    new_query = urlencode(query_params, doseq=True)
+    new_url = urlunparse((
+        parsed.scheme,
+        parsed.netloc,
+        parsed.path,
+        parsed.params,
+        new_query,
+        parsed.fragment
+    ))
+    
+    return RedirectResponse(url=new_url, status_code=302)
 
 if __name__ == "__main__":
     import uvicorn

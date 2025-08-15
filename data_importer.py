@@ -1,26 +1,43 @@
-import os
-import xml.etree.ElementTree as ET
-import duckdb
-from pathlib import Path
-from datetime import datetime
-import logging
+#!/usr/bin/env python3
+"""
+Multi-site Stack Exchange Data Importer
+Imports data from multiple Stack Exchange sites into a single DuckDB database
+"""
 
-logging.basicConfig(level=logging.INFO)
+import os
+import sys
+from pathlib import Path
+import logging
+import duckdb
+from lxml import etree
+from typing import Dict, Any, Optional
+import argparse
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 logger = logging.getLogger(__name__)
 
 class StackExchangeDataImporter:
-    def __init__(self, data_dir: str, db_path: str = "stackslice.db"):
-        self.data_dir = Path(data_dir)
+    """Import data from multiple Stack Exchange sites into DuckDB"""
+    
+    def __init__(self, db_path: str = "stackexchange.db"):
+        """Initialize the importer with database path"""
         self.db_path = db_path
         self.conn = duckdb.connect(db_path)
-        
+        self.create_tables()
+    
     def create_tables(self):
-        """Create the database tables for Stack Exchange data"""
+        """Create database tables with site column"""
+        logger.info("Creating database tables...")
         
         # Posts table
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS posts (
-                id INTEGER PRIMARY KEY,
+                site VARCHAR NOT NULL,
+                id INTEGER NOT NULL,
                 post_type_id INTEGER,
                 accepted_answer_id INTEGER,
                 creation_date TIMESTAMP,
@@ -31,327 +48,462 @@ class StackExchangeDataImporter:
                 last_editor_user_id INTEGER,
                 last_edit_date TIMESTAMP,
                 last_activity_date TIMESTAMP,
-                title TEXT,
-                tags TEXT,
+                title VARCHAR,
+                tags VARCHAR,
                 answer_count INTEGER,
                 comment_count INTEGER,
-                content_license TEXT,
+                content_license VARCHAR,
                 parent_id INTEGER,
-                closed_date TIMESTAMP
+                closed_date TIMESTAMP,
+                PRIMARY KEY (site, id)
             )
         """)
         
         # Users table
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY,
+                site VARCHAR NOT NULL,
+                id INTEGER NOT NULL,
                 reputation INTEGER,
                 creation_date TIMESTAMP,
-                display_name TEXT,
+                display_name VARCHAR,
                 last_access_date TIMESTAMP,
-                website_url TEXT,
-                location TEXT,
+                website_url VARCHAR,
+                location VARCHAR,
                 about_me TEXT,
                 views INTEGER,
                 up_votes INTEGER,
                 down_votes INTEGER,
-                account_id INTEGER
+                profile_image_url VARCHAR,
+                email_hash VARCHAR,
+                account_id INTEGER,
+                PRIMARY KEY (site, id)
             )
         """)
         
         # Comments table
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS comments (
-                id INTEGER PRIMARY KEY,
-                post_id INTEGER,
+                site VARCHAR NOT NULL,
+                id INTEGER NOT NULL,
+                post_id INTEGER NOT NULL,
                 score INTEGER,
                 text TEXT,
                 creation_date TIMESTAMP,
-                user_id INTEGER
+                user_display_name VARCHAR,
+                user_id INTEGER,
+                content_license VARCHAR,
+                PRIMARY KEY (site, id)
             )
         """)
         
         # Votes table
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS votes (
-                id INTEGER PRIMARY KEY,
-                post_id INTEGER,
+                site VARCHAR NOT NULL,
+                id INTEGER NOT NULL,
+                post_id INTEGER NOT NULL,
                 vote_type_id INTEGER,
                 creation_date TIMESTAMP,
                 user_id INTEGER,
-                bounty_amount INTEGER
-            )
-        """)
-        
-        # Badges table
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS badges (
-                id INTEGER PRIMARY KEY,
-                user_id INTEGER,
-                name TEXT,
-                date TIMESTAMP,
-                class INTEGER,
-                tag_based BOOLEAN
+                bounty_amount INTEGER,
+                PRIMARY KEY (site, id)
             )
         """)
         
         # Tags table
         self.conn.execute("""
             CREATE TABLE IF NOT EXISTS tags (
-                id INTEGER PRIMARY KEY,
-                tag_name TEXT,
+                site VARCHAR NOT NULL,
+                id INTEGER NOT NULL,
+                tag_name VARCHAR,
                 count INTEGER,
                 excerpt_post_id INTEGER,
-                wiki_post_id INTEGER
+                wiki_post_id INTEGER,
+                PRIMARY KEY (site, id)
+            )
+        """)
+        
+        # Badges table
+        self.conn.execute("""
+            CREATE TABLE IF NOT EXISTS badges (
+                site VARCHAR NOT NULL,
+                id INTEGER NOT NULL,
+                user_id INTEGER,
+                name VARCHAR,
+                date TIMESTAMP,
+                class INTEGER,
+                tag_based BOOLEAN,
+                PRIMARY KEY (site, id)
             )
         """)
         
         logger.info("Database tables created successfully")
     
-    def parse_date(self, date_str):
-        """Parse Stack Exchange date format"""
+    def parse_date(self, date_str: str) -> Optional[str]:
+        """Parse date string to proper format"""
         if not date_str:
             return None
         try:
-            return datetime.fromisoformat(date_str.replace('T', ' ').replace('Z', ''))
+            # Stack Exchange dates are in ISO format
+            return date_str
         except:
             return None
     
-    def import_posts(self):
+    def safe_int(self, value: str) -> Optional[int]:
+        """Safely convert string to int"""
+        if not value:
+            return None
+        try:
+            return int(value)
+        except:
+            return None
+    
+    def safe_bool(self, value: str) -> Optional[bool]:
+        """Safely convert string to bool"""
+        if not value:
+            return None
+        return value.lower() == 'true'
+    
+    def import_posts(self, site_name: str, data_folder: str):
         """Import posts from Posts.xml"""
-        posts_file = self.data_dir / "Posts.xml"
+        posts_file = Path(data_folder) / "Posts.xml"
         if not posts_file.exists():
-            logger.warning(f"Posts.xml not found in {self.data_dir}")
+            logger.warning(f"Posts.xml not found in {data_folder}")
             return
-            
-        logger.info("Importing posts...")
-        tree = ET.parse(posts_file)
-        root = tree.getroot()
         
-        posts_data = []
-        for row in root.findall('row'):
-            posts_data.append({
-                'id': int(row.get('Id')),
-                'post_type_id': int(row.get('PostTypeId', 0)),
-                'accepted_answer_id': int(row.get('AcceptedAnswerId')) if row.get('AcceptedAnswerId') else None,
-                'creation_date': self.parse_date(row.get('CreationDate')),
-                'score': int(row.get('Score', 0)),
-                'view_count': int(row.get('ViewCount', 0)),
-                'body': row.get('Body', ''),
-                'owner_user_id': int(row.get('OwnerUserId')) if row.get('OwnerUserId') else None,
-                'last_editor_user_id': int(row.get('LastEditorUserId')) if row.get('LastEditorUserId') else None,
-                'last_edit_date': self.parse_date(row.get('LastEditDate')),
-                'last_activity_date': self.parse_date(row.get('LastActivityDate')),
-                'title': row.get('Title', ''),
-                'tags': row.get('Tags', ''),
-                'answer_count': int(row.get('AnswerCount', 0)),
-                'comment_count': int(row.get('CommentCount', 0)),
-                'content_license': row.get('ContentLicense', ''),
-                'parent_id': int(row.get('ParentId')) if row.get('ParentId') else None,
-                'closed_date': self.parse_date(row.get('ClosedDate'))
-            })
+        logger.info(f"Importing posts for {site_name}...")
         
-        # Batch insert
-        self.conn.executemany("""
-            INSERT INTO posts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [(
-            p['id'], p['post_type_id'], p['accepted_answer_id'], p['creation_date'],
-            p['score'], p['view_count'], p['body'], p['owner_user_id'],
-            p['last_editor_user_id'], p['last_edit_date'], p['last_activity_date'],
-            p['title'], p['tags'], p['answer_count'], p['comment_count'],
-            p['content_license'], p['parent_id'], p['closed_date']
-        ) for p in posts_data])
+        # Clear existing posts for this site
+        self.conn.execute("DELETE FROM posts WHERE site = ?", [site_name])
         
-        logger.info(f"Imported {len(posts_data)} posts")
+        # Parse and insert posts
+        parser = etree.iterparse(str(posts_file), events=('start', 'end'))
+        parser = iter(parser)
+        event, root = next(parser)
+        
+        batch = []
+        batch_size = 1000
+        
+        for event, elem in parser:
+            if event == 'end' and elem.tag == 'row':
+                post_data = (
+                    site_name,
+                    self.safe_int(elem.get('Id')),
+                    self.safe_int(elem.get('PostTypeId')),
+                    self.safe_int(elem.get('AcceptedAnswerId')),
+                    self.parse_date(elem.get('CreationDate')),
+                    self.safe_int(elem.get('Score')),
+                    self.safe_int(elem.get('ViewCount')),
+                    elem.get('Body'),
+                    self.safe_int(elem.get('OwnerUserId')),
+                    self.safe_int(elem.get('LastEditorUserId')),
+                    self.parse_date(elem.get('LastEditDate')),
+                    self.parse_date(elem.get('LastActivityDate')),
+                    elem.get('Title'),
+                    elem.get('Tags'),
+                    self.safe_int(elem.get('AnswerCount')),
+                    self.safe_int(elem.get('CommentCount')),
+                    elem.get('ContentLicense'),
+                    self.safe_int(elem.get('ParentId')),
+                    self.parse_date(elem.get('ClosedDate'))
+                )
+                batch.append(post_data)
+                
+                if len(batch) >= batch_size:
+                    self.conn.executemany("""
+                        INSERT INTO posts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, batch)
+                    batch = []
+                
+                elem.clear()
+                root.clear()
+        
+        # Insert remaining records
+        if batch:
+            self.conn.executemany("""
+                INSERT INTO posts VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, batch)
+        
+        count = self.conn.execute("SELECT COUNT(*) FROM posts WHERE site = ?", [site_name]).fetchone()[0]
+        logger.info(f"Imported {count} posts for {site_name}")
     
-    def import_users(self):
+    def import_users(self, site_name: str, data_folder: str):
         """Import users from Users.xml"""
-        users_file = self.data_dir / "Users.xml"
+        users_file = Path(data_folder) / "Users.xml"
         if not users_file.exists():
-            logger.warning(f"Users.xml not found in {self.data_dir}")
+            logger.warning(f"Users.xml not found in {data_folder}")
             return
-            
-        logger.info("Importing users...")
-        tree = ET.parse(users_file)
-        root = tree.getroot()
         
-        users_data = []
-        for row in root.findall('row'):
-            users_data.append({
-                'id': int(row.get('Id')),
-                'reputation': int(row.get('Reputation', 0)),
-                'creation_date': self.parse_date(row.get('CreationDate')),
-                'display_name': row.get('DisplayName', ''),
-                'last_access_date': self.parse_date(row.get('LastAccessDate')),
-                'website_url': row.get('WebsiteUrl', ''),
-                'location': row.get('Location', ''),
-                'about_me': row.get('AboutMe', ''),
-                'views': int(row.get('Views', 0)),
-                'up_votes': int(row.get('UpVotes', 0)),
-                'down_votes': int(row.get('DownVotes', 0)),
-                'account_id': int(row.get('AccountId')) if row.get('AccountId') else None
-            })
+        logger.info(f"Importing users for {site_name}...")
         
-        self.conn.executemany("""
-            INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [(
-            u['id'], u['reputation'], u['creation_date'], u['display_name'],
-            u['last_access_date'], u['website_url'], u['location'], u['about_me'],
-            u['views'], u['up_votes'], u['down_votes'], u['account_id']
-        ) for u in users_data])
+        # Clear existing users for this site
+        self.conn.execute("DELETE FROM users WHERE site = ?", [site_name])
         
-        logger.info(f"Imported {len(users_data)} users")
+        parser = etree.iterparse(str(users_file), events=('start', 'end'))
+        parser = iter(parser)
+        event, root = next(parser)
+        
+        batch = []
+        batch_size = 1000
+        
+        for event, elem in parser:
+            if event == 'end' and elem.tag == 'row':
+                user_data = (
+                    site_name,
+                    self.safe_int(elem.get('Id')),
+                    self.safe_int(elem.get('Reputation')),
+                    self.parse_date(elem.get('CreationDate')),
+                    elem.get('DisplayName'),
+                    self.parse_date(elem.get('LastAccessDate')),
+                    elem.get('WebsiteUrl'),
+                    elem.get('Location'),
+                    elem.get('AboutMe'),
+                    self.safe_int(elem.get('Views')),
+                    self.safe_int(elem.get('UpVotes')),
+                    self.safe_int(elem.get('DownVotes')),
+                    elem.get('ProfileImageUrl'),
+                    elem.get('EmailHash'),
+                    self.safe_int(elem.get('AccountId'))
+                )
+                batch.append(user_data)
+                
+                if len(batch) >= batch_size:
+                    self.conn.executemany("""
+                        INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, batch)
+                    batch = []
+                
+                elem.clear()
+                root.clear()
+        
+        if batch:
+            self.conn.executemany("""
+                INSERT INTO users VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, batch)
+        
+        count = self.conn.execute("SELECT COUNT(*) FROM users WHERE site = ?", [site_name]).fetchone()[0]
+        logger.info(f"Imported {count} users for {site_name}")
     
-    def import_comments(self):
+    def import_comments(self, site_name: str, data_folder: str):
         """Import comments from Comments.xml"""
-        comments_file = self.data_dir / "Comments.xml"
+        comments_file = Path(data_folder) / "Comments.xml"
         if not comments_file.exists():
-            logger.warning(f"Comments.xml not found in {self.data_dir}")
+            logger.warning(f"Comments.xml not found in {data_folder}")
             return
-            
-        logger.info("Importing comments...")
-        tree = ET.parse(comments_file)
-        root = tree.getroot()
         
-        comments_data = []
-        for row in root.findall('row'):
-            comments_data.append({
-                'id': int(row.get('Id')),
-                'post_id': int(row.get('PostId')),
-                'score': int(row.get('Score', 0)),
-                'text': row.get('Text', ''),
-                'creation_date': self.parse_date(row.get('CreationDate')),
-                'user_id': int(row.get('UserId')) if row.get('UserId') else None
-            })
+        logger.info(f"Importing comments for {site_name}...")
         
-        self.conn.executemany("""
-            INSERT INTO comments VALUES (?, ?, ?, ?, ?, ?)
-        """, [(
-            c['id'], c['post_id'], c['score'], c['text'], c['creation_date'], c['user_id']
-        ) for c in comments_data])
+        # Clear existing comments for this site
+        self.conn.execute("DELETE FROM comments WHERE site = ?", [site_name])
         
-        logger.info(f"Imported {len(comments_data)} comments")
+        parser = etree.iterparse(str(comments_file), events=('start', 'end'))
+        parser = iter(parser)
+        event, root = next(parser)
+        
+        batch = []
+        batch_size = 1000
+        
+        for event, elem in parser:
+            if event == 'end' and elem.tag == 'row':
+                comment_data = (
+                    site_name,
+                    self.safe_int(elem.get('Id')),
+                    self.safe_int(elem.get('PostId')),
+                    self.safe_int(elem.get('Score')),
+                    elem.get('Text'),
+                    self.parse_date(elem.get('CreationDate')),
+                    elem.get('UserDisplayName'),
+                    self.safe_int(elem.get('UserId')),
+                    elem.get('ContentLicense')
+                )
+                batch.append(comment_data)
+                
+                if len(batch) >= batch_size:
+                    self.conn.executemany("""
+                        INSERT INTO comments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, batch)
+                    batch = []
+                
+                elem.clear()
+                root.clear()
+        
+        if batch:
+            self.conn.executemany("""
+                INSERT INTO comments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, batch)
+        
+        count = self.conn.execute("SELECT COUNT(*) FROM comments WHERE site = ?", [site_name]).fetchone()[0]
+        logger.info(f"Imported {count} comments for {site_name}")
     
-    def import_votes(self):
-        """Import votes from Votes.xml"""
-        votes_file = self.data_dir / "Votes.xml"
-        if not votes_file.exists():
-            logger.warning(f"Votes.xml not found in {self.data_dir}")
-            return
+    def import_other_tables(self, site_name: str, data_folder: str):
+        """Import votes, tags, and badges"""
+        data_folder = Path(data_folder)
+        
+        # Import votes
+        votes_file = data_folder / "Votes.xml"
+        if votes_file.exists():
+            logger.info(f"Importing votes for {site_name}...")
+            self.conn.execute("DELETE FROM votes WHERE site = ?", [site_name])
             
-        logger.info("Importing votes...")
-        tree = ET.parse(votes_file)
-        root = tree.getroot()
-        
-        votes_data = []
-        for row in root.findall('row'):
-            votes_data.append({
-                'id': int(row.get('Id')),
-                'post_id': int(row.get('PostId')),
-                'vote_type_id': int(row.get('VoteTypeId')),
-                'creation_date': self.parse_date(row.get('CreationDate')),
-                'user_id': int(row.get('UserId')) if row.get('UserId') else None,
-                'bounty_amount': int(row.get('BountyAmount')) if row.get('BountyAmount') else None
-            })
-        
-        self.conn.executemany("""
-            INSERT INTO votes VALUES (?, ?, ?, ?, ?, ?)
-        """, [(
-            v['id'], v['post_id'], v['vote_type_id'], v['creation_date'], v['user_id'], v['bounty_amount']
-        ) for v in votes_data])
-        
-        logger.info(f"Imported {len(votes_data)} votes")
-    
-    def import_badges(self):
-        """Import badges from Badges.xml"""
-        badges_file = self.data_dir / "Badges.xml"
-        if not badges_file.exists():
-            logger.warning(f"Badges.xml not found in {self.data_dir}")
-            return
+            parser = etree.iterparse(str(votes_file), events=('start', 'end'))
+            parser = iter(parser)
+            event, root = next(parser)
             
-        logger.info("Importing badges...")
-        tree = ET.parse(badges_file)
-        root = tree.getroot()
-        
-        badges_data = []
-        for row in root.findall('row'):
-            badges_data.append({
-                'id': int(row.get('Id')),
-                'user_id': int(row.get('UserId')),
-                'name': row.get('Name', ''),
-                'date': self.parse_date(row.get('Date')),
-                'class': int(row.get('Class', 0)),
-                'tag_based': row.get('TagBased') == 'True'
-            })
-        
-        self.conn.executemany("""
-            INSERT INTO badges VALUES (?, ?, ?, ?, ?, ?)
-        """, [(
-            b['id'], b['user_id'], b['name'], b['date'], b['class'], b['tag_based']
-        ) for b in badges_data])
-        
-        logger.info(f"Imported {len(badges_data)} badges")
-    
-    def import_tags(self):
-        """Import tags from Tags.xml"""
-        tags_file = self.data_dir / "Tags.xml"
-        if not tags_file.exists():
-            logger.warning(f"Tags.xml not found in {self.data_dir}")
-            return
+            batch = []
+            for event, elem in parser:
+                if event == 'end' and elem.tag == 'row':
+                    vote_data = (
+                        site_name,
+                        self.safe_int(elem.get('Id')),
+                        self.safe_int(elem.get('PostId')),
+                        self.safe_int(elem.get('VoteTypeId')),
+                        self.parse_date(elem.get('CreationDate')),
+                        self.safe_int(elem.get('UserId')),
+                        self.safe_int(elem.get('BountyAmount'))
+                    )
+                    batch.append(vote_data)
+                    
+                    if len(batch) >= 1000:
+                        self.conn.executemany("INSERT INTO votes VALUES (?, ?, ?, ?, ?, ?, ?)", batch)
+                        batch = []
+                    
+                    elem.clear()
+                    root.clear()
             
-        logger.info("Importing tags...")
-        tree = ET.parse(tags_file)
-        root = tree.getroot()
+            if batch:
+                self.conn.executemany("INSERT INTO votes VALUES (?, ?, ?, ?, ?, ?, ?)", batch)
         
-        tags_data = []
-        for row in root.findall('row'):
-            tags_data.append({
-                'id': int(row.get('Id')),
-                'tag_name': row.get('TagName', ''),
-                'count': int(row.get('Count', 0)),
-                'excerpt_post_id': int(row.get('ExcerptPostId')) if row.get('ExcerptPostId') else None,
-                'wiki_post_id': int(row.get('WikiPostId')) if row.get('WikiPostId') else None
-            })
+        # Import tags
+        tags_file = data_folder / "Tags.xml"
+        if tags_file.exists():
+            logger.info(f"Importing tags for {site_name}...")
+            self.conn.execute("DELETE FROM tags WHERE site = ?", [site_name])
+            
+            parser = etree.iterparse(str(tags_file), events=('start', 'end'))
+            parser = iter(parser)
+            event, root = next(parser)
+            
+            batch = []
+            for event, elem in parser:
+                if event == 'end' and elem.tag == 'row':
+                    tag_data = (
+                        site_name,
+                        self.safe_int(elem.get('Id')),
+                        elem.get('TagName'),
+                        self.safe_int(elem.get('Count')),
+                        self.safe_int(elem.get('ExcerptPostId')),
+                        self.safe_int(elem.get('WikiPostId'))
+                    )
+                    batch.append(tag_data)
+                    
+                    if len(batch) >= 1000:
+                        self.conn.executemany("INSERT INTO tags VALUES (?, ?, ?, ?, ?, ?)", batch)
+                        batch = []
+                    
+                    elem.clear()
+                    root.clear()
+            
+            if batch:
+                self.conn.executemany("INSERT INTO tags VALUES (?, ?, ?, ?, ?, ?)", batch)
         
-        self.conn.executemany("""
-            INSERT INTO tags VALUES (?, ?, ?, ?, ?)
-        """, [(
-            t['id'], t['tag_name'], t['count'], t['excerpt_post_id'], t['wiki_post_id']
-        ) for t in tags_data])
-        
-        logger.info(f"Imported {len(tags_data)} tags")
+        # Import badges
+        badges_file = data_folder / "Badges.xml"
+        if badges_file.exists():
+            logger.info(f"Importing badges for {site_name}...")
+            self.conn.execute("DELETE FROM badges WHERE site = ?", [site_name])
+            
+            parser = etree.iterparse(str(badges_file), events=('start', 'end'))
+            parser = iter(parser)
+            event, root = next(parser)
+            
+            batch = []
+            for event, elem in parser:
+                if event == 'end' and elem.tag == 'row':
+                    badge_data = (
+                        site_name,
+                        self.safe_int(elem.get('Id')),
+                        self.safe_int(elem.get('UserId')),
+                        elem.get('Name'),
+                        self.parse_date(elem.get('Date')),
+                        self.safe_int(elem.get('Class')),
+                        self.safe_bool(elem.get('TagBased'))
+                    )
+                    batch.append(badge_data)
+                    
+                    if len(batch) >= 1000:
+                        self.conn.executemany("INSERT INTO badges VALUES (?, ?, ?, ?, ?, ?, ?)", batch)
+                        batch = []
+                    
+                    elem.clear()
+                    root.clear()
+            
+            if batch:
+                self.conn.executemany("INSERT INTO badges VALUES (?, ?, ?, ?, ?, ?, ?)", batch)
     
-    def import_all_data(self):
-        """Import all Stack Exchange data"""
-        logger.info("Starting data import...")
+    def import_site_data(self, site_name: str, data_folder: str):
+        """Import all data for a specific site"""
+        logger.info(f"Starting import for site: {site_name}")
         
-        # Clear existing data
-        self.conn.execute("DROP TABLE IF EXISTS posts")
-        self.conn.execute("DROP TABLE IF EXISTS users") 
-        self.conn.execute("DROP TABLE IF EXISTS comments")
-        self.conn.execute("DROP TABLE IF EXISTS votes")
-        self.conn.execute("DROP TABLE IF EXISTS badges")
-        self.conn.execute("DROP TABLE IF EXISTS tags")
+        self.import_posts(site_name, data_folder)
+        self.import_users(site_name, data_folder)
+        self.import_comments(site_name, data_folder)
+        self.import_other_tables(site_name, data_folder)
         
-        # Create tables
-        self.create_tables()
+        logger.info(f"Completed import for site: {site_name}")
+    
+    def get_site_stats(self, site_name: str):
+        """Get statistics for a site"""
+        stats = {}
         
-        # Import data
-        self.import_users()
-        self.import_posts()
-        self.import_comments()
-        self.import_votes()
-        self.import_badges()
-        self.import_tags()
+        tables = ['posts', 'users', 'comments', 'votes', 'tags', 'badges']
+        for table in tables:
+            try:
+                count = self.conn.execute(f"SELECT COUNT(*) FROM {table} WHERE site = ?", [site_name]).fetchone()[0]
+                stats[table] = count
+            except:
+                stats[table] = 0
         
-        logger.info("Data import completed successfully!")
+        return stats
+    
+    def list_sites(self):
+        """List all sites in the database"""
+        try:
+            sites = self.conn.execute("SELECT DISTINCT site FROM posts ORDER BY site").fetchall()
+            return [site[0] for site in sites]
+        except:
+            return []
     
     def close(self):
         """Close database connection"""
-        self.conn.close()
+        if self.conn:
+            self.conn.close()
+
+def main():
+    """Main function for command line usage"""
+    parser = argparse.ArgumentParser(description="Import Stack Exchange data for multiple sites")
+    parser.add_argument("--site", required=True, help="Site name (e.g., ai.stackexchange.com)")
+    parser.add_argument("--data-folder", required=True, help="Path to data folder containing XML files")
+    parser.add_argument("--db-path", default="stackexchange.db", help="Database file path")
+    
+    args = parser.parse_args()
+    
+    if not Path(args.data_folder).exists():
+        logger.error(f"Data folder does not exist: {args.data_folder}")
+        sys.exit(1)
+    
+    importer = StackExchangeDataImporter(args.db_path)
+    try:
+        importer.import_site_data(args.site, args.data_folder)
+        
+        # Show stats
+        stats = importer.get_site_stats(args.site)
+        logger.info(f"Import completed for {args.site}:")
+        for table, count in stats.items():
+            logger.info(f"  {table}: {count:,}")
+            
+    finally:
+        importer.close()
 
 if __name__ == "__main__":
-    # Import the AI Stack Exchange data
-    importer = StackExchangeDataImporter("data/ai.stackexchange.com")
-    importer.import_all_data()
-    importer.close()
+    main()

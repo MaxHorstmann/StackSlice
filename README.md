@@ -60,8 +60,6 @@ The application will:
 
 ```
 StackSlice/
-├── data/
-│   └── ai.stackexchange.com/     # Stack Exchange XML data files
 ├── templates/                    # HTML templates
 │   ├── base.html
 │   ├── home.html

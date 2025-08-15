@@ -44,6 +44,11 @@ env/
 *.sqlite
 *.sqlite3
 
+# Data files (can be downloaded)
+data/
+*.xml
+*.7z
+
 # Logs
 *.log
 logs/

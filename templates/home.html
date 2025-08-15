@@ -1,13 +1,28 @@
 {% extends "base.html" %}
 
-{% block title %}StackSlice - AI Stack Exchange Explorer{% endblock %}
+{% block title %}StackSlice - Stack Exchange Explorer{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
         <div class="jumbotron bg-primary text-white p-5 rounded mb-4">
             <h1 class="display-4">Welcome to StackSlice</h1>
-            <p class="lead">Explore and analyze data from AI Stack Exchange with powerful search and analytics tools.</p>
+            <p class="lead">
+                Explore and analyze data from 
+                {% if current_site %}
+                    {{ current_site.replace('.stackexchange.com', '').replace('.meta', ' Meta').title() }}
+                {% else %}
+                    Stack Exchange sites
+                {% endif %}
+                with powerful search and analytics tools.
+            </p>
+            {% if available_sites and available_sites|length > 1 %}
+            <hr class="my-4">
+            <p class="mb-0">
+                <i class="bi bi-info-circle"></i>
+                Use the site switcher in the navigation to explore different Stack Exchange communities.
+            </p>
+            {% endif %}
         </div>
     </div>
 </div>
