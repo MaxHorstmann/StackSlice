@@ -34,7 +34,7 @@ A modern web application for exploring and analyzing Stack Exchange data dumps w
 
 ## 🚀 **Live Demo**
 
-🌍 **[View Live Application](https://your-railway-app.railway.app)** *(Deploy to see your URL)*
+🌍 **[View Live Application](https://web-production-d35c6.up.railway.app)
 
 ## 🛠️ **Tech Stack**
 
