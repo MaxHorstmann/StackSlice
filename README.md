@@ -1,190 +1,195 @@
-# StackSlice
+# StackSlice 🔧
 
-A web application to slice and dice data from Stack Overflow and other Stack Exchange network sites. This project provides an intuitive interface for exploring and analyzing Stack Exchange data dumps.
+> **Slice and dice data from Stack Exchange network sites**
 
-## Features
+A modern web application for exploring and analyzing Stack Exchange data dumps with powerful multi-site support, automatic data downloading, and interactive analytics.
 
-- **Data Import**: Automatically imports Stack Exchange XML data dumps into a DuckDB database
-- **Post Browser**: Browse questions and answers with search, filtering, and sorting
-- **User Explorer**: View user profiles, reputation, and statistics
-- **Analytics Dashboard**: Interactive charts and insights about the community
-- **Responsive Design**: Modern, mobile-friendly interface built with Bootstrap
-- **Fast Performance**: Powered by DuckDB for lightning-fast queries
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/your-template)
 
-## Tech Stack
+## ✨ Features
 
-- **Backend**: FastAPI (Python web framework)
-- **Database**: DuckDB (in-process analytical database)
-- **Frontend**: HTML/CSS/JavaScript with Bootstrap 5
-- **Charts**: Chart.js for data visualization
-- **Templates**: Jinja2 templating engine
+### 🌐 **Multi-Site Support**
+- Browse multiple Stack Exchange sites in one application
+- Site switcher in navigation for seamless switching
+- Currently supports AI Stack Exchange and AI Meta Stack Exchange
+- Easy to add more sites via environment configuration
 
-## Getting Started
+### 📊 **Comprehensive Analytics**
+- Interactive charts and visualizations
+- Community insights and trends
+- Post engagement metrics
+- User reputation analysis
 
-### Prerequisites
+### 🔍 **Advanced Data Explorer**
+- **Posts Browser**: Search, filter, and sort questions/answers
+- **User Directory**: Explore user profiles and statistics  
+- **Real-time Search**: Fast full-text search across posts
+- **Responsive Design**: Works perfectly on desktop and mobile
 
-- Python 3.8 or higher
-- Stack Exchange data dump (XML files)
+### ⚡ **Automated Data Management**
+- **Auto-Download**: Automatically downloads Stack Exchange data from archive.org
+- **Smart Import**: Detects existing data and only imports what's needed
+- **Multi-Site Database**: Unified schema supporting multiple Stack Exchange sites
+- **Fast Performance**: Powered by DuckDB for lightning-fast analytical queries
 
-### Installation
+## 🚀 **Live Demo**
 
-1. **Clone or download this repository**
+🌍 **[View Live Application](https://your-railway-app.railway.app)** *(Deploy to see your URL)*
 
-2. **Install dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
+## 🛠️ **Tech Stack**
 
-3. **Prepare data**: 
-   - Download a Stack Exchange data dump from [Stack Exchange Data Dump](https://archive.org/details/stackexchange)
-   - Extract the files to `data/ai.stackexchange.com/` (or modify the path in the code)
-   - Ensure these files are present:
-     - Posts.xml
-     - Users.xml
-     - Comments.xml
-     - Votes.xml
-     - Badges.xml
-     - Tags.xml
+- **Backend**: FastAPI + Python 3.13
+- **Database**: DuckDB 1.3.2 (embedded analytical database)
+- **Frontend**: Bootstrap 5 + Chart.js + Jinja2 templates
+- **Data Processing**: XML parsing with automatic download from archive.org
+- **Deployment**: Railway.app ready with Procfile and railway.json
 
-4. **Start the application**:
-   ```bash
-   python run.py
-   ```
+## ⚡ **Quick Start**
+
+### **Option 1: Deploy to Railway (Recommended)**
+
+1. **Click the Railway button above** or visit [Railway.app](https://railway.app)
+2. **Connect your GitHub** and select this repository
+3. **Deploy**: Railway automatically handles everything!
+4. **Done**: Your app will be live in ~5-10 minutes
+
+### **Option 2: Run Locally**
+
+```bash
+# Clone the repository
+git clone https://github.com/MaxHorstmann/StackSlice.git
+cd StackSlice
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
+python run.py
+```
 
 The application will:
-- Check for required data files
-- Import data into DuckDB (first run only)
-- Start the web server at http://localhost:8000
+- ✅ **Auto-download** Stack Exchange data from archive.org
+- ✅ **Import data** into DuckDB (first run takes ~5-10 minutes)
+- ✅ **Start web server** at http://localhost:8000
 
-## Project Structure
+## 🗂️ **Project Structure**
 
 ```
 StackSlice/
-├── templates/                    # HTML templates
-│   ├── base.html
-│   ├── home.html
-│   ├── posts.html
-│   ├── post_detail.html
-│   ├── users.html
-│   └── analytics.html
-├── static/
-│   └── style.css                # Custom CSS styles
-├── data_importer.py             # Data import logic
-├── main.py                      # FastAPI application
-├── run.py                       # Startup script
-├── requirements.txt             # Python dependencies
-└── README.md
+├── 📁 templates/          # Jinja2 HTML templates
+│   ├── base.html         # Base template with navigation
+│   ├── home.html         # Site overview with stats
+│   ├── posts.html        # Posts browser with search
+│   ├── users.html        # User directory
+│   └── analytics.html    # Charts and insights
+├── 📁 static/
+│   └── style.css         # Custom styles
+├── 📁 data/              # Auto-downloaded Stack Exchange data
+│   ├── ai.stackexchange.com/
+│   └── ai.meta.stackexchange.com/
+├── 🐍 main.py            # FastAPI web application
+├── 🐍 data_importer.py   # Multi-site data import logic
+├── 🐍 run.py             # Startup script with auto-download
+├── 📋 requirements.txt   # Python dependencies
+├── 🚂 Procfile          # Railway deployment config
+├── ⚙️  railway.json      # Railway app configuration
+└── 📖 README.md         # This file
 ```
 
-## Usage
+## 🌐 **Multi-Site Configuration**
 
-### Home Page
-- Overview statistics of the Stack Exchange site
-- Quick navigation to different sections
-- Search functionality
+Add more Stack Exchange sites by setting the environment variable:
 
-### Posts Browser
-- Browse all posts (questions and answers)
+```bash
+export STACKEXCHANGE_SITES="ai.stackexchange.com,ai.meta.stackexchange.com,datascience.stackexchange.com"
+```
+
+Or modify the `DEFAULT_SITES` list in `run.py`.
+
+## 🔧 **Key Features**
+
+### **Automatic Data Management**
+- Downloads Stack Exchange 7z archives from archive.org
+- Extracts and imports XML data automatically
+- Supports incremental imports (won't re-import existing data)
+- Multi-site database schema with site-specific data
+
+### **Smart Navigation**
+- Site switcher in top navigation
+- Main sites listed first, meta sites second
+- Full site names displayed for clarity
+- Contextual navigation that maintains current site
+
+### **Analytics Dashboard**
+- Questions posted over time
+- Score distribution analysis  
+- Popular tags visualization
+- Top users by reputation
+- Community engagement metrics
+
+### **Advanced Search & Filtering**
+- Full-text search across post titles and content
 - Filter by post type (questions/answers)
-- Search in titles and content
-- Sort by date, score, or views
+- Sort by date, score, views, or relevance
 - Pagination for large datasets
+- Real-time search suggestions
 
-### Post Details
-- View complete post content with formatting
-- See all answers (for questions)
-- View comments and metadata
-- Score and voting information
+## 🗄️ **Database Schema**
 
-### Users Directory
-- Browse all users with their statistics
-- Sort by reputation, join date, or name
-- Search users by display name
-- View user reputation and voting history
+Multi-site enabled schema with `site` column in all tables:
 
-### Analytics Dashboard
-- Interactive charts showing:
-  - Questions posted over time
-  - Score distribution
-  - Popular tags
-  - Top contributing users
-- Community insights and statistics
+```sql
+-- All tables include 'site' column for multi-site support
+posts(id, site, post_type_id, title, body, score, view_count, creation_date, ...)
+users(id, site, display_name, reputation, creation_date, ...)
+comments(id, site, post_id, user_id, text, creation_date, ...)
+votes(id, site, post_id, vote_type_id, creation_date, ...)
+badges(id, site, user_id, name, date, class, ...)
+tags(id, site, tag_name, count, excerpt_post_id, ...)
+```
 
-## Data Import
+## 🚀 **Deployment**
 
-The application automatically handles data import on first run. The import process:
+### **Railway (Recommended)**
+- ✅ One-click deployment
+- ✅ Automatic builds from GitHub
+- ✅ Persistent file storage for DuckDB
+- ✅ Environment variable configuration
+- ✅ Custom domain support
 
-1. **Parses XML files** using Python's ElementTree
-2. **Cleans and normalizes data** (dates, HTML content, etc.)
-3. **Creates optimized database schema** in DuckDB
-4. **Batch inserts data** for performance
-5. **Creates indexes** for fast querying
+### **Other Platforms**
+The app includes standard deployment files for various platforms:
+- `Procfile` for Heroku-style platforms
+- `requirements.txt` with pinned versions
+- `railway.json` for Railway-specific configuration
+- Environment-based configuration (PORT, etc.)
 
-## Database Schema
+## 🤝 **Contributing**
 
-The application creates the following tables:
+Contributions welcome! Ideas for enhancement:
 
-- **posts**: Questions and answers with metadata
-- **users**: User profiles and statistics  
-- **comments**: Post comments
-- **votes**: Voting records
-- **badges**: User badges and achievements
-- **tags**: Tag definitions and usage counts
+- 📈 **More Analytics**: Additional charts and insights
+- 🔍 **Advanced Search**: Elasticsearch integration
+- 🏷️ **Tag Analysis**: Tag relationship mapping
+- 👥 **User Insights**: User behavior analytics
+- 🌍 **More Sites**: Support for additional Stack Exchange sites
+- 🎨 **UI/UX**: Enhanced design and user experience
 
-## API Endpoints
+## 📄 **License**
 
-- `GET /`: Home page with statistics
-- `GET /posts`: Browse posts with filtering/pagination
-- `GET /posts/{id}`: View specific post details
-- `GET /users`: Browse users with search/sort
-- `GET /analytics`: Analytics dashboard
-- `GET /api/tags`: JSON API for tag search
+MIT License - see [LICENSE](LICENSE) file for details.
 
-## Customization
+## 🙏 **Acknowledgments**
 
-### Adding New Sites
-To analyze different Stack Exchange sites:
+- **Stack Exchange** for providing public data dumps
+- **Archive.org** for hosting accessible data archives
+- **FastAPI**, **DuckDB**, and **Bootstrap** communities
+- All Stack Exchange contributors whose knowledge makes this possible
 
-1. Download the data dump for your target site
-2. Update the data directory path in `run.py` and `data_importer.py`
-3. Modify branding/titles in templates as needed
+---
 
-### Extending Analytics
-Add new analytics by:
-
-1. Adding SQL queries in the `/analytics` route in `main.py`
-2. Creating new chart components in `analytics.html`
-3. Styling with Chart.js
-
-### Custom Styling
-- Edit `static/style.css` for visual customizations
-- Templates use Bootstrap 5 classes for responsive design
-- Icons from Bootstrap Icons
-
-## Performance
-
-- **DuckDB** provides excellent performance for analytical queries
-- **Pagination** limits memory usage for large datasets  
-- **Indexes** on commonly queried fields
-- **Batch processing** during data import
-- **Responsive design** works well on mobile devices
-
-## Contributing
-
-This is a demonstration project, but feel free to:
-
-- Add support for additional Stack Exchange sites
-- Improve the analytics with more charts and insights
-- Enhance the search functionality
-- Add user authentication and personalization
-- Implement caching for better performance
-
-## License
-
-This project is provided under the MIT License. See the LICENSE file for details.
-
-## Acknowledgments
-
-- Stack Exchange for providing public data dumps
-- The FastAPI, DuckDB, and Bootstrap communities
-- All Stack Exchange contributors whose data makes this possible
+**Built with ❤️ by [MaxHorstmann](https://github.com/MaxHorstmann)**
