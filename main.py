@@ -23,12 +23,18 @@ def get_db():
     return duckdb.connect(DB_PATH)
 
 def get_available_sites():
-    """Get list of available sites in the database"""
+    """Get list of available sites in the database, with main sites first, then meta sites"""
     try:
         conn = get_db()
         sites = conn.execute("SELECT DISTINCT site FROM posts ORDER BY site").fetchall()
         conn.close()
-        return [site[0] for site in sites]
+        site_list = [site[0] for site in sites]
+        
+        # Sort to put main sites first, then meta sites
+        main_sites = [s for s in site_list if not s.endswith('.meta.stackexchange.com')]
+        meta_sites = [s for s in site_list if s.endswith('.meta.stackexchange.com')]
+        
+        return main_sites + meta_sites
     except:
         return []
 

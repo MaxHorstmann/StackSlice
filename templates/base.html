@@ -48,7 +48,7 @@
                         <a class="nav-link dropdown-toggle" href="#" id="siteSwitcher" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                             <i class="bi bi-globe"></i> 
                             {% if current_site %}
-                                {{ current_site.replace('.stackexchange.com', '').replace('.meta', ' Meta').title() }}
+                                {{ current_site }}
                             {% else %}
                                 Select Site
                             {% endif %}
@@ -59,7 +59,7 @@
                                 <a class="dropdown-item {% if site == current_site %}active{% endif %}" 
                                    href="/switch-site/{{ site }}">
                                     <i class="bi bi-{% if 'meta' in site %}chat-dots{% else %}stack{% endif %}"></i>
-                                    {{ site.replace('.stackexchange.com', '').replace('.meta', ' Meta').title() }}
+                                    {{ site }}
                                     {% if site == current_site %}<i class="bi bi-check-lg float-end"></i>{% endif %}
                                 </a>
                             </li>
@@ -78,7 +78,11 @@
 
     <footer class="bg-light text-center py-3 mt-5">
         <div class="container">
-            <span class="text-muted">StackSlice - Slice and dice Stack Overflow data</span>
+            <span class="text-muted">StackSlice - Slice and dice Stack Exchange data</span>
+            <span class="text-muted mx-2">•</span>
+            <a href="https://github.com/MaxHorstmann/StackSlice" target="_blank" class="text-muted text-decoration-none">
+                <i class="bi bi-github"></i> Source Code
+            </a>
         </div>
     </footer>
 

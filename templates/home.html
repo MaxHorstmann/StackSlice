@@ -8,13 +8,7 @@
         <div class="jumbotron bg-primary text-white p-5 rounded mb-4">
             <h1 class="display-4">Welcome to StackSlice</h1>
             <p class="lead">
-                Explore and analyze data from 
-                {% if current_site %}
-                    {{ current_site.replace('.stackexchange.com', '').replace('.meta', ' Meta').title() }}
-                {% else %}
-                    Stack Exchange sites
-                {% endif %}
-                with powerful search and analytics tools.
+                Explore and analyze data from Stack Exchange sites with powerful search and analytics tools.
             </p>
             {% if available_sites and available_sites|length > 1 %}
             <hr class="my-4">
