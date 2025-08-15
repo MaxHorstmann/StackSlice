@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 ARCHIVE_BASE_URL = "https://archive.org/download/stackexchange/"
-DEFAULT_SITES = ["ai.stackexchange.com", "ai.meta.stackexchange.com"]
+DEFAULT_SITES = ["ai.meta.stackexchange.com"]
 REQUIRED_FILES = [
     "Posts.xml", "Users.xml", "Comments.xml", 
     "Votes.xml", "Badges.xml", "Tags.xml"
