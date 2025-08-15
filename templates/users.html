@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Users - StackSlice{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Users</h1>
+    <span class="badge bg-primary fs-6">{{ "{:,}".format(total_users) }} total users</span>
+</div>
+
+<!-- Search and Filter Form -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <input type="text" class="form-control" name="search" value="{{ search }}" placeholder="Search users by name...">
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" name="sort">
+                    <option value="reputation" {% if sort == "reputation" %}selected{% endif %}>Highest Reputation</option>
+                    <option value="recent" {% if sort == "recent" %}selected{% endif %}>Most Recent</option>
+                    <option value="name" {% if sort == "name" %}selected{% endif %}>Name (A-Z)</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i> Search
+                </button>
+            </div>
+            <div class="col-md-3">
+                <a href="/users" class="btn btn-outline-secondary w-100">
+                    <i class="bi bi-arrow-clockwise"></i> Reset
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Users Grid -->
+<div class="row">
+    {% for user in users %}
+    <div class="col-md-6 col-lg-4 mb-3">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-start">
+                    <div class="flex-shrink-0">
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                            <i class="bi bi-person-fill fs-4"></i>
+                        </div>
+                    </div>
+                    <div class="flex-grow-1 ms-3">
+                        <h6 class="card-title mb-1">{{ user.display_name }}</h6>
+                        <div class="mb-2">
+                            <span class="badge bg-warning text-dark">
+                                <i class="bi bi-trophy"></i> {{ "{:,}".format(user.reputation) }}
+                            </span>
+                        </div>
+                        {% if user.location %}
+                        <p class="text-muted small mb-1">
+                            <i class="bi bi-geo-alt"></i> {{ user.location }}
+                        </p>
+                        {% endif %}
+                        <p class="text-muted small mb-2">
+                            <i class="bi bi-calendar"></i> Joined {{ user.creation_date }}
+                        </p>
+                        <div class="d-flex justify-content-between text-muted small">
+                            <span>
+                                <i class="bi bi-arrow-up-circle text-success"></i> {{ user.up_votes }}
+                            </span>
+                            <span>
+                                <i class="bi bi-arrow-down-circle text-danger"></i> {{ user.down_votes }}
+                            </span>
+                            <span>
+                                <i class="bi bi-eye"></i> {{ "{:,}".format(user.views) }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<nav aria-label="Users pagination">
+    <ul class="pagination justify-content-center">
+        {% if has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ prev_page }}&search={{ search }}&sort={{ sort }}">
+                <i class="bi bi-chevron-left"></i> Previous
+            </a>
+        </li>
+        {% endif %}
+        
+        {% for page_num in range(1, total_pages + 1) %}
+            {% if page_num == current_page %}
+            <li class="page-item active">
+                <span class="page-link">{{ page_num }}</span>
+            </li>
+            {% elif page_num <= 3 or page_num > total_pages - 3 or (page_num >= current_page - 2 and page_num <= current_page + 2) %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_num }}&search={{ search }}&sort={{ sort }}">{{ page_num }}</a>
+            </li>
+            {% elif page_num == 4 or page_num == total_pages - 3 %}
+            <li class="page-item disabled">
+                <span class="page-link">...</span>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ next_page }}&search={{ search }}&sort={{ sort }}">
+                Next <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% if users|length == 0 %}
+<div class="text-center py-5">
+    <i class="bi bi-people display-1 text-muted"></i>
+    <h3 class="text-muted mt-3">No users found</h3>
+    <p class="text-muted">Try adjusting your search criteria or browse all users.</p>
+    <a href="/users" class="btn btn-primary">
+        <i class="bi bi-arrow-left"></i> View All Users
+    </a>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - StackSlice{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Analytics Dashboard</h1>
+    <span class="badge bg-primary fs-6">AI Stack Exchange Insights</span>
+</div>
+
+<div class="row">
+    <!-- Posts Over Time Chart -->
+    <div class="col-md-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-graph-up"></i> Questions Over Time
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="postsOverTimeChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Score Distribution -->
+    <div class="col-md-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-pie-chart"></i> Score Distribution
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="scoreDistributionChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Top Users -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-trophy"></i> Top Users by Reputation
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>User</th>
+                                <th>Reputation</th>
+                                <th>Votes</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in top_users %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ user[0] }}</td>
+                                <td>
+                                    <span class="badge bg-warning text-dark">{{ "{:,}".format(user[1]) }}</span>
+                                </td>
+                                <td>
+                                    <small>
+                                        <span class="text-success">↑{{ user[2] }}</span>
+                                        <span class="text-danger">↓{{ user[3] }}</span>
+                                    </small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Popular Tags -->
+    <div class="col-md-6 mb-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-tags"></i> Most Popular Tags
+                </h5>
+            </div>
+            <div class="card-body">
+                <canvas id="tagsChart"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Insights Cards -->
+<div class="row">
+    <div class="col-md-4 mb-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-lightbulb display-4 mb-3"></i>
+                <h5>Most Active Topic</h5>
+                <p class="mb-0">
+                    {% if popular_tags %}
+                        <strong>{{ popular_tags[0][0] }}</strong><br>
+                        <small>{{ popular_tags[0][1] }} questions</small>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <i class="bi bi-award display-4 mb-3"></i>
+                <h5>Top Contributor</h5>
+                <p class="mb-0">
+                    {% if top_users %}
+                        <strong>{{ top_users[0][0] }}</strong><br>
+                        <small>{{ "{:,}".format(top_users[0][1]) }} reputation</small>
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4 mb-3">
+        <div class="card bg-warning text-dark">
+            <div class="card-body text-center">
+                <i class="bi bi-chat-square-dots display-4 mb-3"></i>
+                <h5>Community Health</h5>
+                <p class="mb-0">
+                    <strong>Active</strong><br>
+                    <small>Regular Q&A activity</small>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Posts Over Time Chart
+const postsCtx = document.getElementById('postsOverTimeChart').getContext('2d');
+const postsData = {
+    labels: [
+        {% for month, count in posts_over_time %}
+        '{{ month.strftime("%Y-%m") if month else "Unknown" }}',
+        {% endfor %}
+    ],
+    datasets: [{
+        label: 'Questions',
+        data: [
+            {% for month, count in posts_over_time %}
+            {{ count }},
+            {% endfor %}
+        ],
+        borderColor: 'rgb(13, 110, 253)',
+        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+        tension: 0.1,
+        fill: true
+    }]
+};
+
+new Chart(postsCtx, {
+    type: 'line',
+    data: postsData,
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true
+            }
+        }
+    }
+});
+
+// Score Distribution Chart
+const scoreCtx = document.getElementById('scoreDistributionChart').getContext('2d');
+const scoreData = {
+    labels: [
+        {% for range_name, count in score_distribution %}
+        '{{ range_name }}',
+        {% endfor %}
+    ],
+    datasets: [{
+        data: [
+            {% for range_name, count in score_distribution %}
+            {{ count }},
+            {% endfor %}
+        ],
+        backgroundColor: [
+            '#dc3545',
+            '#6c757d', 
+            '#198754',
+            '#0dcaf0',
+            '#fd7e14',
+            '#6f42c1'
+        ]
+    }]
+};
+
+new Chart(scoreCtx, {
+    type: 'doughnut',
+    data: scoreData,
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                position: 'bottom'
+            }
+        }
+    }
+});
+
+// Tags Chart
+const tagsCtx = document.getElementById('tagsChart').getContext('2d');
+const tagsData = {
+    labels: [
+        {% for tag_name, count in popular_tags[:10] %}
+        '{{ tag_name }}',
+        {% endfor %}
+    ],
+    datasets: [{
+        label: 'Usage Count',
+        data: [
+            {% for tag_name, count in popular_tags[:10] %}
+            {{ count }},
+            {% endfor %}
+        ],
+        backgroundColor: 'rgba(13, 110, 253, 0.8)',
+        borderColor: 'rgb(13, 110, 253)',
+        borderWidth: 1
+    }]
+};
+
+new Chart(tagsCtx, {
+    type: 'bar',
+    data: tagsData,
+    options: {
+        responsive: true,
+        plugins: {
+            legend: {
+                display: false
+            }
+        },
+        scales: {
+            y: {
+                beginAtZero: true
+            },
+            x: {
+                ticks: {
+                    maxRotation: 45
+                }
+            }
+        }
+    }
+});
+</script>
+{% endblock %}

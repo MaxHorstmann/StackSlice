@@ -1,0 +1,153 @@
+{% extends "base.html" %}
+
+{% block title %}Posts - StackSlice{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Posts</h1>
+    <span class="badge bg-primary fs-6">{{ "{:,}".format(total_posts) }} total posts</span>
+</div>
+
+<!-- Search and Filter Form -->
+<div class="card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <input type="text" class="form-control" name="search" value="{{ search }}" placeholder="Search in title and content...">
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" name="post_type">
+                    <option value="">All Posts</option>
+                    <option value="questions" {% if post_type == "questions" %}selected{% endif %}>Questions</option>
+                    <option value="answers" {% if post_type == "answers" %}selected{% endif %}>Answers</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select class="form-select" name="sort">
+                    <option value="recent" {% if sort == "recent" %}selected{% endif %}>Most Recent</option>
+                    <option value="score" {% if sort == "score" %}selected{% endif %}>Highest Score</option>
+                    <option value="views" {% if sort == "views" %}selected{% endif %}>Most Views</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">
+                    <i class="bi bi-search"></i> Search
+                </button>
+            </div>
+            <div class="col-md-2">
+                <a href="/posts" class="btn btn-outline-secondary w-100">
+                    <i class="bi bi-arrow-clockwise"></i> Reset
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Posts List -->
+<div class="row">
+    {% for post in posts %}
+    <div class="col-12 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-1 text-center">
+                        <div class="d-flex flex-column align-items-center">
+                            <span class="badge bg-primary mb-1">{{ post.score }}</span>
+                            <small class="text-muted">score</small>
+                            {% if post.post_type_id == 1 %}
+                                <span class="badge bg-success mt-1">{{ post.answer_count }}</span>
+                                <small class="text-muted">answers</small>
+                                <span class="badge bg-info mt-1">{{ "{:,}".format(post.view_count) }}</span>
+                                <small class="text-muted">views</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-11">
+                        <h5 class="card-title">
+                            <a href="/posts/{{ post.id }}" class="text-decoration-none">
+                                {% if post.post_type_id == 1 %}
+                                    <i class="bi bi-question-circle text-primary"></i>
+                                {% else %}
+                                    <i class="bi bi-chat-square-text text-success"></i>
+                                {% endif %}
+                                {{ post.title }}
+                            </a>
+                        </h5>
+                        
+                        {% if post.body_preview %}
+                        <p class="card-text text-muted">{{ post.body_preview }}</p>
+                        {% endif %}
+                        
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                {% for tag in post.tags %}
+                                <span class="badge bg-secondary me-1">{{ tag }}</span>
+                                {% endfor %}
+                            </div>
+                            <div class="text-end">
+                                <small class="text-muted">
+                                    {% if post.owner_user_id %}
+                                        by User {{ post.owner_user_id }} •
+                                    {% endif %}
+                                    {{ post.creation_date }}
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<!-- Pagination -->
+{% if total_pages > 1 %}
+<nav aria-label="Posts pagination">
+    <ul class="pagination justify-content-center">
+        {% if has_prev %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ prev_page }}&search={{ search }}&post_type={{ post_type }}&sort={{ sort }}">
+                <i class="bi bi-chevron-left"></i> Previous
+            </a>
+        </li>
+        {% endif %}
+        
+        {% for page_num in range(1, total_pages + 1) %}
+            {% if page_num == current_page %}
+            <li class="page-item active">
+                <span class="page-link">{{ page_num }}</span>
+            </li>
+            {% elif page_num <= 3 or page_num > total_pages - 3 or (page_num >= current_page - 2 and page_num <= current_page + 2) %}
+            <li class="page-item">
+                <a class="page-link" href="?page={{ page_num }}&search={{ search }}&post_type={{ post_type }}&sort={{ sort }}">{{ page_num }}</a>
+            </li>
+            {% elif page_num == 4 or page_num == total_pages - 3 %}
+            <li class="page-item disabled">
+                <span class="page-link">...</span>
+            </li>
+            {% endif %}
+        {% endfor %}
+        
+        {% if has_next %}
+        <li class="page-item">
+            <a class="page-link" href="?page={{ next_page }}&search={{ search }}&post_type={{ post_type }}&sort={{ sort }}">
+                Next <i class="bi bi-chevron-right"></i>
+            </a>
+        </li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}
+
+{% if posts|length == 0 %}
+<div class="text-center py-5">
+    <i class="bi bi-search display-1 text-muted"></i>
+    <h3 class="text-muted mt-3">No posts found</h3>
+    <p class="text-muted">Try adjusting your search criteria or browse all posts.</p>
+    <a href="/posts" class="btn btn-primary">
+        <i class="bi bi-arrow-left"></i> View All Posts
+    </a>
+</div>
+{% endif %}
+{% endblock %}

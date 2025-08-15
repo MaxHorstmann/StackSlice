@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}StackSlice - AI Stack Exchange Explorer{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="jumbotron bg-primary text-white p-5 rounded mb-4">
+            <h1 class="display-4">Welcome to StackSlice</h1>
+            <p class="lead">Explore and analyze data from AI Stack Exchange with powerful search and analytics tools.</p>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ "{:,}".format(stats.total_posts) }}</h4>
+                        <p class="mb-0">Total Posts</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-journal-text fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ "{:,}".format(stats.total_questions) }}</h4>
+                        <p class="mb-0">Questions</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-question-circle fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ "{:,}".format(stats.total_answers) }}</h4>
+                        <p class="mb-0">Answers</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-chat-square-text fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-danger text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h4>{{ "{:,}".format(stats.total_users) }}</h4>
+                        <p class="mb-0">Users</p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="bi bi-people fs-1"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-tags"></i> Popular Tags
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-flex flex-wrap gap-2">
+                    {% for tag_name, count in top_tags %}
+                    <span class="badge bg-secondary fs-6 p-2">
+                        {{ tag_name }} <span class="badge bg-light text-dark ms-1">{{ count }}</span>
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-rocket-takeoff"></i> Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <a href="/posts?sort=recent" class="btn btn-outline-primary w-100 mb-2">
+                            <i class="bi bi-clock"></i> Recent Posts
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="/posts?sort=score" class="btn btn-outline-success w-100 mb-2">
+                            <i class="bi bi-arrow-up-circle"></i> Top Scored Posts
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="/posts?post_type=questions" class="btn btn-outline-info w-100 mb-2">
+                            <i class="bi bi-question-circle"></i> Browse Questions
+                        </a>
+                    </div>
+                    <div class="col-md-6">
+                        <a href="/users?sort=reputation" class="btn btn-outline-warning w-100 mb-2">
+                            <i class="bi bi-trophy"></i> Top Users
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-info-circle"></i> Statistics
+                </h5>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled">
+                    <li class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                        <span>Total Comments:</span>
+                        <strong>{{ "{:,}".format(stats.total_comments) }}</strong>
+                    </li>
+                    <li class="d-flex justify-content-between border-bottom pb-2 mb-2">
+                        <span>Latest Activity:</span>
+                        <strong>{{ stats.latest_activity }}</strong>
+                    </li>
+                    <li class="d-flex justify-content-between">
+                        <span>Answer Rate:</span>
+                        <strong>
+                            {% if stats.total_questions > 0 %}
+                                {{ "%.1f"|format((stats.total_answers / stats.total_questions) * 100) }}%
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </strong>
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="bi bi-search"></i> Search Posts
+                </h5>
+            </div>
+            <div class="card-body">
+                <form action="/posts" method="get">
+                    <div class="mb-3">
+                        <input type="text" class="form-control" name="search" placeholder="Search posts...">
+                    </div>
+                    <div class="mb-3">
+                        <select class="form-select" name="post_type">
+                            <option value="">All Posts</option>
+                            <option value="questions">Questions Only</option>
+                            <option value="answers">Answers Only</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="bi bi-search"></i> Search
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
